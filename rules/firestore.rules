@@ -1,0 +1,104 @@
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      allow read:
+        if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    match /projects/{projectId} {
+      function existingData() {
+        return resource.data;
+      }
+
+      function incomingData() {
+        return request.resource.data;
+      }
+
+      function allowListProject() {
+        return request.auth != null
+            && existingData().users[request.auth.uid].email == request.auth.token.email;
+      }
+
+      function allowCreateProject() {
+      	return request.auth != null
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.permissions.createProject == true
+    				&& incomingData().users[request.auth.uid].email == request.auth.token.email
+    				&& incomingData().users[request.auth.uid].userExist == true
+    				&& incomingData().users[request.auth.uid].permissions.updateDraft == true
+    				&& incomingData().users[request.auth.uid].permissions.updateSchema == true
+    				&& incomingData().users[request.auth.uid].permissions.updateSettings == true
+    				&& incomingData().users[request.auth.uid].permissions.updateUsers == true
+    				&& incomingData().users[request.auth.uid].permissions.publish == true
+    				&& incomingData().users[request.auth.uid].permissions.createJob == true
+            && projectId != 'index'
+            && projectId != 'edit'
+    				&& projectId != 'content'
+    				&& projectId != 'schema'
+    				&& projectId != 'settings'
+    				&& projectId != 'project';
+      }
+
+      function allowUpdateDraft() {
+      	return request.auth != null
+            && existingData().users[request.auth.uid].permissions.updateDraft == true
+        		&& request.writeFields.size() == 1
+        		&& request.writeFields[0].matches('^draft\\..*');
+      }
+
+      function allowUpdatePublished() {
+      	return request.auth != null
+            && existingData().users[request.auth.uid].permissions.publish == true
+        		&& request.writeFields.size() == 1
+        		&& request.writeFields[0] == 'published';
+      }
+
+      function allowUpdateSchema() {
+      	return request.auth != null
+            && existingData().users[request.auth.uid].permissions.updateSchema == true
+        		&& request.writeFields.size() == 1
+        		&& request.writeFields[0] == 'schema';
+      }
+
+      function allowUpdateSettings() {
+      	return request.auth != null
+            && existingData().users[request.auth.uid].permissions.updateSettings == true
+        		&& request.writeFields.size() == 1
+        		&& request.writeFields[0].matches('^settings\\..*');
+      }
+
+      function allowUpdateUsers() {
+      	return request.auth != null
+            && existingData().users[request.auth.uid].permissions.updateUsers == true
+        		&& request.writeFields.size() == 1
+        		&& request.writeFields[0].matches('^users\\..*');
+      }
+
+    	allow list:
+        if allowListProject();
+
+      allow create:
+        if allowCreateProject();
+
+      allow update:
+        if allowUpdateDraft()
+        || allowUpdatePublished()
+				|| allowUpdateSchema()
+				|| allowUpdateSettings()
+				|| allowUpdateUsers();
+    }
+
+    match /projects/{projectId}/versions/{versionId} {
+      allow create:
+        if request.auth != null
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.users[request.auth.uid].permissions.publish == true;
+    }
+
+    match /projects/{projectId}/jobs/{jobId} {
+      allow create:
+        if request.auth != null
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.users[request.auth.uid].permissions.createJob == true;
+    }
+  }
+}
